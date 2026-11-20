@@ -6,11 +6,11 @@ Each one says what to look for.
 ## It builds and passes
 
 1. **Tests.** `uv sync && uv run pytest -q`
-   Expect `83 passed` and no skips. It takes under a minute. Most of that is the CLI tests,
+   Expect `107 passed` and no skips. It takes one to two minutes. Most of that is the CLI tests,
    which start real Python processes.
 
 2. **Lint and types.** `uv run ruff check && uv run mypy`
-   Expect `All checks passed!` and `Success: no issues found in 20 source files`.
+   Expect `All checks passed!` and `Success: no issues found in 24 source files`.
 
 3. **Versions.** `uv pip list | grep -iE "^(langgraph|pydantic) "`
    Expect LangGraph 1.2.x and pydantic 2.x. `uv.lock` pins the exact versions.
@@ -18,10 +18,14 @@ Each one says what to look for.
 ## It is offline and holds no secrets
 
 4. **Network code.** `grep -rnE "urllib|requests|httpx|socket" src/`
-   Expect hits only in `src/heal_loop/models.py`, inside `OllamaModel`.
+   Expect hits in two files only. `src/heal_loop/models.py`, inside `OllamaModel`. And
+   `src/heal_loop/jaeger.py`, which reads traces back from a local Jaeger for `make trace-demo`.
+   The trace exporter is a library and is imported in one place: `from_env` in `tracing.py`.
 
 5. **Keys and environment.** `grep -rnE "environ|API_KEY|api_key|token" src/`
-   Expect two lines in `cli.py`, for `OLLAMA_BASE_URL` and `OLLAMA_MODEL`. Nothing else.
+   Expect two lines in `cli.py`, for `OLLAMA_BASE_URL` and `OLLAMA_MODEL`. Three lines in
+   `tracing.py` that read `OTEL_` variables. Three lines about token counts, which are numbers
+   reported by a model server, not credentials. Nothing else.
 
 6. **Nothing that names a business.** Search the folder for your company, client, host and
    product names: `grep -rniE "name1|name2" --exclude-dir=.venv --exclude=uv.lock .`
@@ -87,3 +91,26 @@ Each one says what to look for.
 15. **You can explain it.** Read `src/heal_loop/graph.py` top to bottom. For each node, say what it
     reads from the state, what it writes, and which edge follows. If you cannot, ask before the
     interview, not in it.
+
+## Tracing
+
+16. **Off means off.** `env -u OTEL_EXPORTER_OTLP_ENDPOINT uv run python -m heal_loop start --dir /tmp/heal-off`
+    Expect the usual `PAUSED:` output, nothing on stderr, and no `trace-demo.json` in
+    `/tmp/heal-off`.
+
+17. **A real trace arrives.** `make jaeger-up && make trace-demo`
+    Expect `FIXED:`, then two trees. The first starts `heal_loop.start`, the second
+    `heal_loop.resume`. The last line is `resume root links to the start root span: yes`.
+    Compare the shape with `docs/trace-example.txt`. Then `make jaeger-down`, and
+    `podman ps -a | grep lab-jaeger` prints nothing.
+
+18. **Nothing private is in a span.** `uv run pytest -q tests/test_tracing.py -k no_prompt`
+    Expect `1 passed`. Now break it. In `tracing.py`, in `on_tool_call`, add
+    `span.set_attribute("leak", " ".join(command))`. Run the test again and see it fail. Undo the
+    edit. Then `grep -n "sum(rows" docs/trace-example.json` prints nothing: the real trace has no
+    file content in it.
+
+19. **A dead collector does not break a run.**
+    `OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:9 uv run python -m heal_loop start --dir /tmp/heal-dead; echo $?`
+    Expect the usual `PAUSED:` output, one line on stderr that starts `Failed to export spans`,
+    and `0`. It takes about 3 seconds longer than a run without tracing.

@@ -4,6 +4,7 @@
     python -m heal_loop resume --dir /tmp/heal-demo --approve     (or --reject)
 
 The paused run is kept in a SQLite checkpoint under --dir, so the two commands are separate processes.
+Set OTEL_EXPORTER_OTLP_ENDPOINT to send traces (see TRACING.md). Without it nothing is traced.
 """
 
 import argparse
@@ -18,6 +19,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from .fixture import STILL_BROKEN, fenced, fixture_config, make_fixture, proposal, review
 from .graph import build_graph, resume, start
 from .models import Model, OllamaModel, ScriptedModel
+from .tracing import from_env
 
 RUN_ID = "demo"
 
@@ -65,14 +67,16 @@ def main(argv: list[str] | None = None) -> int:
         cfg = fixture_config(directory)
         model = ScriptedModel({})  # no model is called after the approval gate
     connection = sqlite3.connect(directory / "checkpoints.sqlite", check_same_thread=False)
+    hooks, flush_traces = from_env(model, link_dir=directory)
     try:
-        graph = build_graph(cfg, model, checkpointer=SqliteSaver(connection))
+        graph = build_graph(cfg, model, hooks, checkpointer=SqliteSaver(connection))
         result = start(graph, RUN_ID) if args.command == "start" else resume(graph, RUN_ID, args.approve)
     except RuntimeError as error:  # for example: resume when no run is waiting
         print(f"error: {error}", file=sys.stderr)
         return 1
     finally:
         connection.close()
+        flush_traces()  # before the process exits, or the last spans are lost
     report(result, directory)
     return 0
 

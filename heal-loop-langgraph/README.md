@@ -18,7 +18,7 @@ Needs Python 3.12, [uv](https://docs.astral.sh/uv/) and git.
 
 ```bash
 uv sync
-uv run pytest          # 83 tests, offline, under a minute
+uv run pytest          # 107 tests, offline, one to two minutes
 uv run ruff check
 uv run mypy            # strict
 ```
@@ -39,6 +39,22 @@ No model is installed or downloaded. Every test and the demo use `ScriptedModel`
 fixed replies. If `OLLAMA_BASE_URL` is set, the CLI uses `OllamaModel` instead: plain HTTP to a
 local Ollama-compatible `/api/chat` endpoint (`OLLAMA_MODEL` picks the model). There is no other
 provider and no API key anywhere.
+
+## Tracing
+
+The loop can send OpenTelemetry traces: one root span per process, a span per graph node, per
+model call and per tool call. It is off by default. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to turn it
+on. Spans hold names, verdicts, counts and sizes. They never hold prompts, replies, file contents
+or diffs.
+
+```bash
+make jaeger-up      # a local Jaeger in rootless podman, on loopback only
+make trace-demo     # runs the demo with tracing on and prints the span tree read back from Jaeger
+make jaeger-down
+```
+
+`TRACING.md` has the attribute list, what is left out and why, and the limits.
+`docs/trace-example.txt` is the tree from a real run.
 
 ## The graph
 
@@ -74,6 +90,8 @@ Where the code lives:
 | `src/heal_loop/models.py` | `Model` protocol, `ScriptedModel`, `OllamaModel`, JSON parsing, validate and retry once |
 | `src/heal_loop/config.py` | `HealConfig`: workspace, rerun command, allow and deny lists, limits |
 | `src/heal_loop/hooks.py` | No-op tracing seam |
+| `src/heal_loop/tracing.py` | The seam implemented with OpenTelemetry spans. Off unless the endpoint variable is set |
+| `src/heal_loop/jaeger.py` | Reads a run's traces back from a local Jaeger and prints the tree |
 | `src/heal_loop/fixture.py` | The toy broken job |
 | `src/heal_loop/cli.py` | The demo CLI |
 
@@ -116,7 +134,8 @@ Where the code lives:
 - **No lock.** The original keeps one healer per job with a lock file (lines 194-199).
 - **No notifications, no deploy steps, no incident log.** The original reports to a chat channel,
   ships files to a second machine, rebuilds a server and appends to an incidents file.
-- **No tracing yet.** `hooks.py` is the seam for it.
+- **Traces hold no content.** No prompt, reply, file or diff is recorded, and there is no switch
+  to turn that on. See `TRACING.md`.
 
 ## Differences from the original worth knowing
 
@@ -129,3 +148,5 @@ Where the code lives:
   also stops, and alerts a person.
 
 See `WALKTHROUGH.md` for the spoken version and `REVIEW-CHECKLIST.md` for how to check the claims.
+`docs/observability-proposal.md` is a proposal, not a description of anything built: it weighs
+OpenTelemetry against Langfuse for the production platform this loop was ported from.

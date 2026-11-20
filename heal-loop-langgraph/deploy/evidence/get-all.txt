@@ -1,0 +1,26 @@
+NAME                              READY   STATUS      RESTARTS   AGE     IP           NODE                     NOMINATED NODE   READINESS GATES
+pod/heal-loop-fixed-77w66         0/1     Completed   0          2m41s   10.244.0.8   heal-lab-control-plane   <none>           <none>
+pod/heal-loop-reverted-lcsfg      0/1     Completed   0          2m41s   10.244.0.9   heal-lab-control-plane   <none>           <none>
+pod/lab-blocked                   1/1     Running     0          3m1s    10.244.0.6   heal-lab-control-plane   <none>           <none>
+pod/lab-jaeger-6b94ff785d-6tcpt   1/1     Running     0          3m1s    10.244.0.5   heal-lab-control-plane   <none>           <none>
+pod/lab-probe                     1/1     Running     0          3m1s    10.244.0.7   heal-lab-control-plane   <none>           <none>
+
+NAME                  TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)              AGE    SELECTOR
+service/lab-blocked   ClusterIP   10.96.24.241   <none>        8080/TCP             3m1s   app.kubernetes.io/name=lab-blocked
+service/lab-jaeger    ClusterIP   10.96.243.45   <none>        4318/TCP,16686/TCP   3m1s   app.kubernetes.io/name=lab-jaeger
+
+NAME                         READY   UP-TO-DATE   AVAILABLE   AGE    CONTAINERS   IMAGES                                                                                                          SELECTOR
+deployment.apps/lab-jaeger   1/1     1            1           3m1s   jaeger       docker.io/jaegertracing/jaeger:2.23.0@sha256:3823829974ccfc2485d2e48b165579091f32295022ae80ca49704e2f4834116e   app.kubernetes.io/name=lab-jaeger
+
+NAME                                    DESIRED   CURRENT   READY   AGE    CONTAINERS   IMAGES                                                                                                          SELECTOR
+replicaset.apps/lab-jaeger-6b94ff785d   1         1         1       3m1s   jaeger       docker.io/jaegertracing/jaeger:2.23.0@sha256:3823829974ccfc2485d2e48b165579091f32295022ae80ca49704e2f4834116e   app.kubernetes.io/name=lab-jaeger,pod-template-hash=6b94ff785d
+
+NAME                           STATUS     COMPLETIONS   DURATION   AGE     CONTAINERS   IMAGES                      SELECTOR
+job.batch/heal-loop-fixed      Complete   1/1           11s        2m41s   heal-loop    localhost/heal-loop:0.1.0   batch.kubernetes.io/controller-uid=3f079723-98fc-4338-a5a9-2f5473429bd5
+job.batch/heal-loop-reverted   Complete   1/1           11s        2m41s   heal-loop    localhost/heal-loop:0.1.0   batch.kubernetes.io/controller-uid=d5839946-8f93-48cd-9048-b8beb3edc536
+
+NAME                                                  POD-SELECTOR                         AGE
+networkpolicy.networking.k8s.io/default-deny-all      <none>                               13s
+networkpolicy.networking.k8s.io/heal-loop-egress      app.kubernetes.io/name=heal-loop     13s
+networkpolicy.networking.k8s.io/lab-blocked-ingress   app.kubernetes.io/name=lab-blocked   3m1s
+networkpolicy.networking.k8s.io/lab-jaeger-ingress    app.kubernetes.io/name=lab-jaeger    13s

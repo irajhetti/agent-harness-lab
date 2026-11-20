@@ -1,0 +1,31 @@
+trace 492a4de72d9e232aac156faf1103e715  service=heal-loop  spans=16
+heal_loop.start  41.9 ms  heal.paused=True  heal.run_id=demo  heal.segment=start
+  node gather_evidence  14.5 ms  heal.evidence.chars=96  heal.node=gather_evidence  heal.round=0
+    execute_tool git.rev-parse  3.2 ms  process.exit.code=0
+    execute_tool git.worktree  10.3 ms  process.exit.code=0
+  node fixer  4.6 ms  heal.model_calls=1  heal.node=fixer  heal.proposal.edits=1  heal.retried=False  heal.round=1
+    execute_tool git.ls-files  2.6 ms  process.exit.code=0
+    chat scripted  0.0 ms  gen_ai.provider.name=scripted  heal.attempt=1  heal.prompt.chars=993  heal.reply.chars=236  heal.role=fixer
+  node apply_in_worktree  17.2 ms  heal.diff.chars=195  heal.edits.chars=38  heal.edits.count=1  heal.node=apply_in_worktree  heal.round=1
+    execute_tool apply_edits  0.4 ms
+    execute_tool git.add  3.2 ms  process.exit.code=0
+    execute_tool git.commit  6.6 ms  process.exit.code=0
+    execute_tool git.diff  3.2 ms  process.exit.code=0
+    execute_tool git.rev-parse  2.3 ms  process.exit.code=0
+  node reviewer  0.2 ms  heal.model_calls=1  heal.node=reviewer  heal.retried=False  heal.review.notes.chars=36  heal.review.verdict=APPROVE  heal.round=1
+    chat scripted  0.0 ms  gen_ai.provider.name=scripted  heal.attempt=1  heal.prompt.chars=987  heal.reply.chars=102  heal.role=reviewer
+  node human_approval  0.0 ms  heal.node=human_approval  heal.paused=True  heal.round=1
+
+trace 18b8c12bf26d51dfb7731286e113fe3a  service=heal-loop  spans=9
+heal_loop.resume  56.3 ms  heal.model_calls=2  heal.outcome=fixed  heal.rounds=1  heal.run_id=demo  heal.segment=resume  heal.start_trace_id=492a4de72d9e232aac156faf1103e715
+  link -> trace 492a4de72d9e232aac156faf1103e715 span fcb9e1d5d3f6f899
+  node human_approval  0.0 ms  heal.decision=approve  heal.node=human_approval  heal.round=1
+  node merge_and_rerun  44.2 ms  heal.node=merge_and_rerun  heal.outcome=fixed  heal.round=1
+    execute_tool git.merge  12.2 ms  process.exit.code=0
+    execute_tool git.rev-parse  2.5 ms  process.exit.code=0
+    execute_tool rerun  29.1 ms  process.exit.code=0
+  node finish  7.6 ms  heal.node=finish  heal.round=1
+    execute_tool git.worktree  3.1 ms  process.exit.code=0
+    execute_tool git.branch  3.3 ms  process.exit.code=0
+
+resume root links to the start root span: yes

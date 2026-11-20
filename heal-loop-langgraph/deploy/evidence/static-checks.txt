@@ -1,0 +1,6 @@
+kubeconform -strict -summary -kubernetes-version 1.37.0 k8s/
+Summary: 14 resources found in 7 files - Valid: 14, Invalid: 0, Errors: 0, Skipped: 0
+kube-linter lint k8s/
+KubeLinter 0.8.3
+
+No lint errors found!

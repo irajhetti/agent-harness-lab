@@ -12,7 +12,8 @@ The model only ever returns data (schemas.py). Every action is taken by code in 
 import json
 import re
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict
@@ -20,6 +21,7 @@ from typing import Any, TypedDict
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.errors import GraphInterrupt
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command, interrupt
@@ -50,6 +52,7 @@ class HealState(TypedDict, total=False):
     diff: str
     review: dict[str, Any]  # a validated Review
     escalation: str  # set by any node that needs a person; routes to `escalate`
+    refused_edits: int  # how many edits the path rules refused (a count only, for the trace)
     decision: str  # the person's answer at the approval gate
     merge_commit: str
     outcome: str  # fixed | escalated | skipped | rejected | reverted
@@ -62,18 +65,30 @@ class Nodes:
 
     # ---- helpers -------------------------------------------------------------------------
 
+    @contextmanager
+    def _tool(self, name: str) -> Iterator[None]:
+        """Tell the tracing seam that a tool call starts, and how it ends."""
+        self.hooks.on_tool_start(name)
+        try:
+            yield
+        except BaseException as error:
+            self.hooks.on_error(error)
+            raise
+        self.hooks.on_tool_end(name)
+
     def _sh(
-        self, args: list[str], cwd: Path, check: bool = True, timeout: int = 60
+        self, args: list[str], cwd: Path, check: bool = True, timeout: int = 60, name: str = ""
     ) -> subprocess.CompletedProcess[str]:
         """Run one command as an argument list. Never a shell string."""
-        result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout)
-        self.hooks.on_tool_call(args, result.returncode)
+        with self._tool(name or args[0]):
+            result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+            self.hooks.on_tool_call(args, result.returncode)
         if check and result.returncode != 0:
             raise RuntimeError(f"{' '.join(args[:4])} failed: {(result.stderr or result.stdout)[-600:]}")
         return result
 
     def _git(self, *args: str, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
-        return self._sh(["git", *BOT, *args], cwd or self.cfg.workspace, check)
+        return self._sh(["git", *BOT, *args], cwd or self.cfg.workspace, check, name=f"git.{args[0]}")
 
     def _editable_files(self, root: Path) -> str:
         # shortcut: every allow-listed file is pasted into the prompt, capped at 20k characters.
@@ -124,11 +139,15 @@ class Nodes:
         proposal = FixProposal.model_validate(state["proposal"])
         refused = violations(worktree, proposal.edits, self.cfg)
         if refused:
-            return {"escalation": "the fixer tried to edit files it may not touch: " + "; ".join(refused)}
-        for edit in proposal.edits:
-            target = worktree / edit.path
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(edit.new_content)
+            return {
+                "escalation": "the fixer tried to edit files it may not touch: " + "; ".join(refused),
+                "refused_edits": len(refused),
+            }
+        with self._tool("apply_edits"):
+            for edit in proposal.edits:
+                target = worktree / edit.path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(edit.new_content)
         self._git("add", "--", *[edit.path for edit in proposal.edits], cwd=worktree)
         message = f"heal({self.cfg.job}): {proposal.cause[:100]}\n\n{proposal.rationale}"
         self._git("commit", "-q", "--allow-empty", "-m", message, cwd=worktree)
@@ -174,7 +193,9 @@ class Nodes:
             return {"escalation": f"the approved fix could not be merged into the workspace: {detail}"}
         merge_commit = self._git("rev-parse", "HEAD").stdout.strip()
         try:
-            rerun = self._sh(list(cfg.rerun_command), cfg.workspace, check=False, timeout=cfg.rerun_timeout_s)
+            rerun = self._sh(
+                list(cfg.rerun_command), cfg.workspace, check=False, timeout=cfg.rerun_timeout_s, name="rerun"
+            )
             passed = rerun.returncode == 0
         except subprocess.TimeoutExpired:
             passed = False
@@ -250,7 +271,14 @@ def build_graph(
 
         def run(state: HealState) -> dict[str, Any]:
             nodes.hooks.on_node_start(name, state)
-            update = node(state)
+            try:
+                update = node(state)
+            except GraphInterrupt:  # the approval gate: a pause, not a failure
+                nodes.hooks.on_node_pause(name)
+                raise
+            except BaseException as error:
+                nodes.hooks.on_error(error)
+                raise
             nodes.hooks.on_node_end(name, update)
             return update
 

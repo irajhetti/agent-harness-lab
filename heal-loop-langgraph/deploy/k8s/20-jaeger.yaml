@@ -1,0 +1,71 @@
+# Jaeger v2 all-in-one: receives OTLP over HTTP on 4318, keeps traces in memory, serves a UI on 16686.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-jaeger
+  namespace: heal-lab
+  labels:
+    app.kubernetes.io/name: lab-jaeger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lab-jaeger
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: lab-jaeger
+    spec:
+      serviceAccountName: heal-loop
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: jaeger
+          image: docker.io/jaegertracing/jaeger:2.23.0@sha256:3823829974ccfc2485d2e48b165579091f32295022ae80ca49704e2f4834116e
+          ports:
+            - name: otlp-http
+              containerPort: 4318
+            - name: ui
+              containerPort: 16686
+          readinessProbe:
+            httpGet:
+              path: /
+              port: ui
+          livenessProbe:
+            httpGet:
+              path: /
+              port: ui
+            initialDelaySeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab-jaeger
+  namespace: heal-lab
+spec:
+  selector:
+    app.kubernetes.io/name: lab-jaeger
+  ports:
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: ui
+      port: 16686
+      targetPort: ui

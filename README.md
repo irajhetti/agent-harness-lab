@@ -6,7 +6,7 @@ Built with AI coding agents under the owner's direction. Each project has its ow
 
 | Project | What it shows |
 |---|---|
-| `heal-loop-langgraph/` | A fixer and reviewer agent loop in Python and LangGraph, with typed outputs, code-enforced guardrails and a human approval step |
+| `heal-loop-langgraph/` | A fixer and reviewer agent loop in Python and LangGraph, with typed outputs, code-enforced guardrails and a human approval step. Also: OpenTelemetry tracing (`TRACING.md`) and a hardened local Kubernetes deployment (`deploy/`) |
 | `permission-rag/` | Permission-aware retrieval: embeddings in pgvector, hybrid search, provenance, and access enforced in the database |
 
 Everything runs locally with no paid services. Nothing here is used in production.

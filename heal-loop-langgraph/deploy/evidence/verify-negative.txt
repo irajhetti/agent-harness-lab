@@ -1,0 +1,42 @@
+kubectl apply -f negative/allow-all-egress.yaml
+networkpolicy.networking.k8s.io/sabotage-allow-all-egress created
+if ./scripts/verify.sh; then result="UNEXPECTED: verify passed with a wrong policy"; status=1; \
+else result="EXPECTED: verify failed with the wrong policy applied"; status=0; fi; \
+kubectl delete -f negative/allow-all-egress.yaml; echo "$result"; exit $status
+== 1. The workload ran
+PASS  job-fixed-complete                 SuccessCriteriaMet Complete
+PASS  job-fixed-outcome                  FIXED: total() skips the first row
+PASS  job-reverted-complete              SuccessCriteriaMet Complete
+PASS  job-reverted-outcome               REVERTED: the approved fix was merged but the rerun still failed, so it was reverted
+PASS  traces-reached-jaeger              {"services":["jaeger","heal-loop"]}
+== 2. Runtime hardening, checked inside lab-probe (same settings as the Jobs)
+PASS  probe-matches-job-fixed            same settings as lab-probe
+PASS  probe-matches-job-reverted         same settings as lab-probe
+PASS  uid-is-not-root                    10001
+PASS  root-fs-is-read-only               touch: cannot touch '/probe-test': Read-only file system
+PASS  volume-is-writable                 wrote
+PASS  no-service-account-token           absent
+PASS  no-capabilities                    CapEff:	0000000000000000
+PASS  no-new-privileges                  NoNewPrivs:	1
+PASS  seccomp-filter-on                  Seccomp:	2
+PASS  memory-limit-applied               268435456
+PASS  no-build-tools-in-image            none
+PASS  secret-mounted-as-file             de9d54019c08f56b2680366214804e2b9b36f330ab6931451ed704c38e92c91c  -
+PASS  secret-not-in-environment          not in env
+== 3. Pod Security Admission refuses a privileged pod (server-side dry run, nothing is created)
+PASS  psa-refuses-privileged-pod         Error from server (Forbidden): pods "psa-test" is forbidden: violates PodSecurity "restricted:v1.37": privileged (container "psa-test" must not set securityContext.privileged=true), allowPrivilegeEscalation != false (container "psa-test" must set securityContext.allowPrivilegeEscalation=false), unrestricted capabilities (container "psa-test" must set securityContext.capabilities.drop=["ALL"]), runAsNonRoot != true (pod or container "psa-test" must set securityContext.runAsNonRoot=true), seccompProfile (pod or container "psa-test" must set securityContext.seccompProfile.type to "RuntimeDefault" or "Localhost")
+== 4. Network policy: controls first, with the policies removed
+PASS  before-blocked-server-open         OPEN lab-blocked:8080 (10.96.24.241)
+PASS  before-jaeger-ui-open              OPEN lab-jaeger:16686 (10.96.243.45)
+PASS  before-kube-api-open               OPEN kubernetes.default.svc:443 (10.96.0.1)
+PASS  before-internet-open               OPEN 1.1.1.1:443 (1.1.1.1)
+== 5. Network policy: the same probes with the policies applied
+FAIL  after-blocked-server-blocked       wanted /^BLOCKED .*timed out/ but saw: OPEN lab-blocked:8080 (10.96.24.241) 
+PASS  after-jaeger-ui-blocked            BLOCKED lab-jaeger:16686 (10.96.243.45): timed out
+FAIL  after-kube-api-blocked             wanted /^BLOCKED .*timed out/ but saw: OPEN kubernetes.default.svc:443 (10.96.0.1) 
+FAIL  after-internet-blocked             wanted /^BLOCKED .*timed out/ but saw: OPEN 1.1.1.1:443 (1.1.1.1) 
+PASS  after-jaeger-otlp-open             OPEN lab-jaeger:4318 (10.96.243.45)
+
+RESULT: 3 check(s) FAILED
+networkpolicy.networking.k8s.io "sabotage-allow-all-egress" deleted from heal-lab namespace
+EXPECTED: verify failed with the wrong policy applied

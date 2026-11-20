@@ -1,0 +1,10 @@
+# The namespace, with Pod Security Admission set to "restricted" in enforce mode.
+# The API server then refuses any pod here that runs as root, keeps capabilities,
+# allows privilege escalation, uses host namespaces or host paths, or has no seccomp profile.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: heal-lab
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.37

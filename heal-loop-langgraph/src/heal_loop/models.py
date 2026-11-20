@@ -39,6 +39,7 @@ class OllamaModel:
         self.url = base_url.rstrip("/") + "/api/chat"
         self.model = model
         self.timeout_s = timeout_s
+        self.last_usage: tuple[int, int] | None = None  # (prompt tokens, reply tokens) of the last call
 
     def complete(self, role: str, prompt: str) -> str:
         body = {
@@ -54,7 +55,10 @@ class OllamaModel:
             self.url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
         )
         with urllib.request.urlopen(request, timeout=self.timeout_s) as response:  # noqa: S310
-            return str(json.load(response)["message"]["content"])
+            data = json.load(response)
+        counts = (data.get("prompt_eval_count"), data.get("eval_count"))  # absent unless the server reports them
+        self.last_usage = (counts[0], counts[1]) if all(isinstance(count, int) for count in counts) else None
+        return str(data["message"]["content"])
 
 
 def last_json(text: str) -> Any:
@@ -82,7 +86,12 @@ def ask[T: BaseModel](model: Model, role: str, prompt: str, schema: type[T], hoo
     error = ""
     for attempt in (1, 2):
         full = prompt if attempt == 1 else f"{prompt}\n\nYour last reply was not valid:\n{error}\nReply again."
-        reply = model.complete(role, full)
+        hooks.on_model_start(role, full)
+        try:
+            reply = model.complete(role, full)
+        except BaseException as failure:
+            hooks.on_error(failure)
+            raise
         hooks.on_model_call(role, full, reply)
         try:
             return schema.model_validate(last_json(reply)), "", attempt

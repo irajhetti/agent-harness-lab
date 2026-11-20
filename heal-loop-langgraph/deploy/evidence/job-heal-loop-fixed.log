@@ -1,0 +1,15 @@
+Cause:    total() skips the first row
+Reviewer: Minimal, and it addresses the cause.
+
+diff --git a/app/report.py b/app/report.py
+index 9e641fc..d2bbd93 100644
+--- a/app/report.py
++++ b/app/report.py
+@@ -1,2 +1,2 @@
+ def total(rows):
+-    return sum(rows[1:])
++    return sum(rows)
+
+PAUSED: Merge this fix into the workspace and rerun nightly-report?
+Nothing has been merged. Run: python -m heal_loop resume --dir /work/run --approve | --reject
+FIXED: total() skips the first row

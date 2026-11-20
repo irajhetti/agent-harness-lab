@@ -44,6 +44,19 @@ nothing added later can ride along. Then it runs the job with the command from c
 **9. Finish.** Every path writes one line to a ledger and removes the worktree. The branch is kept
 unless the fix held, so a person can read what was tried.
 
+## Tracing
+
+The loop can send OpenTelemetry traces. It is off unless I set the standard endpoint variable.
+When it is on, each process sends one tree: the run at the top, the graph nodes under it, and the
+model calls and commands under each node. Every step has a duration. So I can see where the time
+went, which round a call belongs to, whether a reply needed a retry, what the reviewer said and
+which command failed. The spans hold names, verdicts, counts and sizes. They never hold a prompt,
+a reply, a file or a diff, because a trace store is read by more people than the run itself. A
+test fills a run with a marker string and checks that it reaches no span. The pause and the resume
+are two processes, so they are two traces. They share a run id, and the second links back to the
+first. If the collector is down, the run still finishes. I tested that too. I read the traces back
+from a local Jaeger through its API. I have not looked at its web page.
+
 ## Why each control exists
 
 - Schemas: a model's reply is untrusted input, like a web form.

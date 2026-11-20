@@ -1,0 +1,131 @@
+# Test fixtures for `make verify`. They are not part of the workload.
+#
+# lab-probe: the same pod settings as the Jobs, and the same label, but it sleeps.
+# The NetworkPolicies select by label, so they treat it exactly like the workload.
+# verify runs its checks inside this pod with `kubectl exec`.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab-probe
+  namespace: heal-lab
+  labels:
+    app.kubernetes.io/name: heal-loop
+spec:
+  serviceAccountName: heal-loop
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: heal-loop
+      image: localhost/heal-loop:0.1.0
+      imagePullPolicy: Never
+      command: ["sleep", "infinity"]
+      envFrom:
+        - configMapRef:
+            name: heal-loop-config
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+      volumeMounts:
+        - name: work
+          mountPath: /work
+        - name: demo-secret
+          mountPath: /run/secrets/heal-loop
+          readOnly: true
+  volumes:
+    - name: work
+      emptyDir:
+        sizeLimit: 64Mi
+    - name: demo-secret
+      secret:
+        secretName: heal-loop-demo
+        defaultMode: 0440
+---
+# lab-blocked: a web server the workload has no permission to reach. It reuses the app image
+# (Python's built-in http.server), so no extra image is pulled.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lab-blocked
+  namespace: heal-lab
+  labels:
+    app.kubernetes.io/name: lab-blocked
+spec:
+  serviceAccountName: heal-loop
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: server
+      image: localhost/heal-loop:0.1.0
+      imagePullPolicy: Never
+      command: ["python", "-m", "http.server", "8080", "--directory", "/srv"]
+      ports:
+        - name: http
+          containerPort: 8080
+      readinessProbe:
+        tcpSocket:
+          port: http
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 20m
+          memory: 32Mi
+        limits:
+          cpu: 200m
+          memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab-blocked
+  namespace: heal-lab
+spec:
+  selector:
+    app.kubernetes.io/name: lab-blocked
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# lab-blocked accepts connections from every pod in the namespace. This is on purpose.
+# It leaves the workload's own egress policy as the only thing that can stop the workload reaching it,
+# so the test shows which rule did the blocking.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab-blocked-ingress
+  namespace: heal-lab
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: lab-blocked
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080

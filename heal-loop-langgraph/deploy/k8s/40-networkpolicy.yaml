@@ -1,0 +1,64 @@
+# 1. Default deny. The empty podSelector selects every pod in the namespace.
+#    Listing both policy types with no rules means: no traffic in, no traffic out.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: heal-lab
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+# 2. The workload may open connections to Jaeger on TCP 4318, and to cluster DNS. Nothing else.
+#    DNS is needed because the workload finds Jaeger by the name "lab-jaeger".
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: heal-loop-egress
+  namespace: heal-lab
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: heal-loop
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: lab-jaeger
+      ports:
+        - protocol: TCP
+          port: 4318
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# 3. Jaeger accepts connections from the workload on TCP 4318. Its UI port 16686 stays closed to pods.
+#    Jaeger has no egress rule, so it cannot open connections at all.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lab-jaeger-ingress
+  namespace: heal-lab
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: lab-jaeger
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: heal-loop
+      ports:
+        - protocol: TCP
+          port: 4318

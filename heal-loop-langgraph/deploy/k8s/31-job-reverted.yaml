@@ -1,0 +1,67 @@
+# Bad-fix path: the scripted fix does not work, so the merge is reverted. The log must end with REVERTED.
+# The CLI demo needs two commands: `start` stops at the approval gate, `resume` gives the decision.
+# This Job runs both, so the approval here is automatic. That is for the demonstration only.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: heal-loop-reverted
+  namespace: heal-lab
+  labels:
+    app.kubernetes.io/name: heal-loop
+spec:
+  backoffLimit: 0 # one attempt; a failure should be seen, not retried
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 3600 # the finished Job and its log are removed after an hour
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: heal-loop # the NetworkPolicies select on this label
+    spec:
+      restartPolicy: Never
+      serviceAccountName: heal-loop
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001 # makes the volumes below group-owned by 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: heal-loop
+          image: localhost/heal-loop:0.1.0
+          imagePullPolicy: Never # the image is loaded into the node from an archive; there is no registry
+          command: ["/bin/sh", "-ec"] # -e: stop at the first command that fails
+          args:
+            - |
+              heal-loop start --dir "$HEAL_DIR" --bad-fix
+              heal-loop resume --dir "$HEAL_DIR" --approve
+          envFrom:
+            - configMapRef:
+                name: heal-loop-config
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: work
+              mountPath: /work # the only writable path
+            - name: demo-secret
+              mountPath: /run/secrets/heal-loop
+              readOnly: true
+      volumes:
+        - name: work
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: demo-secret
+          secret:
+            secretName: heal-loop-demo
+            defaultMode: 0440

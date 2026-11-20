@@ -1,0 +1,14 @@
+# NOT part of the deployment. A deliberately wrong policy, used once to show that `make verify` can fail.
+# It lets the workload open connections to anything. With it applied, verify must report FAIL.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sabotage-allow-all-egress
+  namespace: heal-lab
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: heal-loop
+  policyTypes: ["Egress"]
+  egress:
+    - {}

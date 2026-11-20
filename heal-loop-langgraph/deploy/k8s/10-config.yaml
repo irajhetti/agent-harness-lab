@@ -1,0 +1,20 @@
+# A dedicated ServiceAccount with no token. The workload never talks to the Kubernetes API.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: heal-loop
+  namespace: heal-lab
+automountServiceAccountToken: false
+---
+# Non-secret settings. Every key becomes an environment variable in the workload (envFrom).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: heal-loop-config
+  namespace: heal-lab
+data:
+  HEAL_DIR: /work/run # the run directory, on the emptyDir volume
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://lab-jaeger:4318 # turns tracing on in the app
+  OTEL_SERVICE_NAME: heal-loop
+# The Secret "heal-loop-demo" is not in this repository. `make deploy` generates a random dummy value
+# and creates it. It is mounted as a file to show the pattern. The app does not read it.

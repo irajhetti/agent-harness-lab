@@ -1,0 +1,11 @@
+collected 2026-11-20T22:05:32Z
+Linux 6.18.58.1-microsoft-standard-WSL2
+podman version 5.7.0
+kind v0.33.0 go1.26.7 linux/amd64
+Client Version: v1.37.2
+Server Version: v1.37.0
+kubeconform v0.8.0
+kube-linter 0.8.3
+NAME                     STATUS   ROLES           AGE    VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                       KERNEL-VERSION                              CONTAINER-RUNTIME
+heal-lab-control-plane   Ready    control-plane   115s   v1.37.0   10.89.0.3     <none>        Debian GNU/Linux 13 (trixie)   6.18.58.1-microsoft-standard-WSL2 (amd64)   containerd://2.3.4
+image localhost/heal-loop:0.1.0 id a440e599e9c06c8c2060a6c3dfc133b0704ac5533e36d2651eb30bc7eb349239 built 2026-11-20 22:04:41.832185916 +0000 UTC
