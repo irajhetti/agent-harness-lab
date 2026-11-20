@@ -1,0 +1,46 @@
+[project]
+name = "heal-loop"
+version = "0.1.0"
+description = "A bounded fixer/reviewer heal loop on LangGraph, with a human approval gate. Demonstration project."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-core>=1.8.4",
+    "langgraph>=1.2.24",
+    "langgraph-checkpoint-sqlite>=3.1.3",
+    "pydantic>=2.14.4",
+]
+
+[project.scripts]
+heal-loop = "heal_loop.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.24,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# S101 assert is what tests are made of. S603/S607: tests and the loop run git and the fixed job command
+# with argument lists (never a shell string), which is the point of the project.
+"tests/*" = ["S101", "S603", "S607"]
+"src/heal_loop/graph.py" = ["S603"]
+"src/heal_loop/fixture.py" = ["S603", "S607"]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
